@@ -84,7 +84,7 @@ include '../includes/navbar.php';
                                 </div>
                             </div>
 
-                            <div class='d-flex flex-wrap gap-2 justify-content-md-end'>
+                            <div class='d-flex flex-wrap gap-2 justify-content-md-end w-50'>
                                 <a href='edit_forms.php?id=$form_id' class='btn btn-outline-secondary'>Edit</a>
                                 <a href='view_forms.php?token=$form_token' class='btn btn-outline-secondary'>Open form</a>
                                 <a href='responses.php?id=$form_id' class='btn btn-outline-secondary'>Responses</a>

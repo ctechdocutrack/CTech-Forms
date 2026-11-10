@@ -44,6 +44,64 @@
 
     $responses_result = mysqli_query($conn, $responses_sql);
 
+    // ========================================
+    // VIEW INDIVIDUAL RESPONSE
+    // ========================================
+    $selected_response = null;
+    $response_answers = [];
+
+    if (isset($_GET['view']) && is_numeric($_GET['view'])) {
+
+        $selected_response_id = (int) $_GET['view'];
+
+        // Verify that this response belongs to the current form
+        $selected_sql = "SELECT response_id, submitted_at
+                        FROM responses
+                        WHERE response_id = $selected_response_id
+                        AND form_id = $form_id
+                        LIMIT 1";
+
+        $selected_result = mysqli_query($conn, $selected_sql);
+
+        if ($selected_result && mysqli_num_rows($selected_result) > 0) {
+
+            $selected_response = mysqli_fetch_assoc($selected_result);
+
+            // Get questions and corresponding answers
+            $answer_sql = "SELECT
+                                fq.question_title,
+                                fq.question_type,
+                                fq.is_required,
+                                ra.answer_text
+                        FROM form_questions fq
+                        LEFT JOIN response_answers ra
+                                ON fq.question_id = ra.question_id
+                                AND ra.response_id = $selected_response_id
+                        WHERE fq.form_id = $form_id
+                        ORDER BY fq.question_order ASC, fq.question_id ASC";
+
+            $answer_result = mysqli_query($conn, $answer_sql);
+
+            if ($answer_result) {
+                while ($answer = mysqli_fetch_assoc($answer_result)) {
+
+                    $answer_text = $answer['answer_text'] ?? '';
+
+                    // Decode checkbox answers
+                    $decoded = json_decode($answer_text, true);
+
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $answer_text = implode(', ', array_map('strval', $decoded));
+                    }
+
+                    $answer['answer_text'] = $answer_text;
+
+                    $response_answers[] = $answer;
+                }
+            }
+        }
+    }
+
     if (!$responses_result) {
         error_log("Load responses failed: " . mysqli_error($conn));
         exit("Unable to load responses.");
@@ -260,6 +318,7 @@
                                     <th style="width: 80px;">No.</th>
                                     <th>Response ID</th>
                                     <th>Date Submitted</th>
+                                    <th class="text-center">Action</th>
                                 </tr>
                             </thead>
 
@@ -270,11 +329,31 @@
                                 ?>
 
                                 <?php while ($response = mysqli_fetch_assoc($responses_result)): ?>
+
                                     <tr>
                                         <td><?= $count++ ?></td>
-                                        <td>#<?= (int) $response['response_id'] ?></td>
-                                        <td><?= escapeOutput($response['submitted_at']) ?></td>
+
+                                        <td>
+                                            #<?= (int) $response['response_id'] ?>
+                                        </td>
+
+                                        <td>
+                                            <?= escapeOutput($response['submitted_at']) ?>
+                                        </td>
+
+                                        <td class="text-center">
+
+                                            <a href="responses.php?id=<?= $form_id ?>&view=<?= (int) $response['response_id'] ?>"
+                                            class="btn btn-sm btn-primary">
+
+                                                <i class="bi bi-eye me-1"></i>
+                                                View Response
+
+                                            </a>
+
+                                        </td>
                                     </tr>
+
                                 <?php endwhile; ?>
                             </tbody>
                         </table>
@@ -289,5 +368,113 @@
             </div>
         </div>
     </div>
+
+    <?php if ($selected_response): ?>
+
+    <div class="modal fade" id="responseModal" tabindex="-1"
+        aria-labelledby="responseModalLabel" aria-hidden="true">
+
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <div>
+                        <h5 class="modal-title" id="responseModalLabel">
+                            <i class="bi bi-clipboard-check me-2"></i>
+                            Student Response #<?= (int) $selected_response['response_id'] ?>
+                        </h5>
+
+                        <small class="text-muted">
+                            Submitted:
+                            <?= escapeOutput($selected_response['submitted_at']) ?>
+                        </small>
+                    </div>
+
+                    <button type="button" class="btn-close"
+                            data-bs-dismiss="modal"></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <?php if (empty($response_answers)): ?>
+
+                        <div class="alert alert-warning">
+                            No answers found for this response.
+                        </div>
+
+                    <?php else: ?>
+
+                        <?php $number = 1; ?>
+
+                        <?php foreach ($response_answers as $answer): ?>
+
+                            <div class="card mb-3">
+
+                                <div class="card-body">
+
+                                    <h6 class="fw-semibold mb-3">
+                                        <?= $number++ ?>.
+                                        <?= escapeOutput($answer['question_title']) ?>
+
+                                        <?php if ($answer['is_required']): ?>
+                                            <span class="text-danger">*</span>
+                                        <?php endif; ?>
+                                    </h6>
+
+                                    <?php if (trim($answer['answer_text']) !== ''): ?>
+
+                                        <div class="bg-light rounded p-3">
+                                            <?= nl2br(escapeOutput($answer['answer_text'])) ?>
+                                        </div>
+
+                                    <?php else: ?>
+
+                                        <div class="text-muted fst-italic">
+                                            No answer provided.
+                                        </div>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button type="button" class="btn btn-secondary"
+                            data-bs-dismiss="modal">
+                        Close
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+        const responseModal = new bootstrap.Modal(
+            document.getElementById('responseModal')
+        );
+
+        responseModal.show();
+
+    });
+    </script>
+
+    <?php endif; ?>
 
     <?php include '../includes/footer.php'; ?>
